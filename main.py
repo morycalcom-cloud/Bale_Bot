@@ -1,54 +1,51 @@
+from flask import Flask, request
 import requests
-import time
 
 TOKEN = "BOT_TOKEN"
 BASE_URL = f"https://tapi.bale.ai/bot{TOKEN}"
 
-last_update_id = 0
+app = Flask(__name__)
 
 
-def get_updates():
-    global last_update_id
-
-    url = BASE_URL + "/getUpdates"
-    params = {"offset": last_update_id + 1}
-
-    res = requests.get(url, params=params)
-
-    print("STATUS:", res.status_code)
-    print("TEXT:", res.text)   # 👈 خیلی مهم
-
-    try:
-        return res.json().get("result", [])
-    except:
-        return []
-
-
-def send(chat_id, text):
+def send_message(chat_id, text):
     url = BASE_URL + "/sendMessage"
-    requests.post(url, json={"chat_id": chat_id, "text": text})
+    requests.post(url, json={
+        "chat_id": chat_id,
+        "text": text
+    })
 
 
-print("Bot started...")
+@app.route("/", methods=["GET"])
+def home():
+    return "Bot is running"
 
-while True:
-    updates = get_updates()
 
-    print("UPDATES:", updates)
+@app.route("/webhook", methods=["POST"])
+def webhook():
 
-    for u in updates:
-        last_update_id = u["update_id"]
+    data = request.json
 
-        if "message" not in u:
-            continue
+    if "message" not in data:
+        return "ok"
 
-        msg = u["message"]
-        chat_id = msg["chat"]["id"]
-        text = msg.get("text", "")
+    message = data["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "")
 
-        print("MESSAGE:", text)
+    if text == "/start":
+        send_message(chat_id, "👋 سلام! ربات فعال شد")
 
-        if text == "/start":
-            send(chat_id, "سلام 👋 ربات فعاله")
+    elif text == "📥 فایل‌ها":
+        send_message(chat_id, "🚧 بخش فایل‌ها")
 
-    time.sleep(2)
+    elif text == "🖼 تصویر":
+        send_message(chat_id, "🚧 بخش تصویر")
+
+    else:
+        send_message(chat_id, "از منو استفاده کن 👇")
+
+    return "ok"
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=8080)
