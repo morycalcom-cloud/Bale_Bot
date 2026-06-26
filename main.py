@@ -2,22 +2,7 @@ import requests
 import time
 
 TOKEN = "BOT_TOKEN"
-
 BASE_URL = f"https://tapi.bale.ai/bot{TOKEN}"
-
-
-# ---------------- SEND MESSAGE ----------------
-
-def send_message(chat_id, text):
-    url = BASE_URL + "/sendMessage"
-    data = {
-        "chat_id": chat_id,
-        "text": text
-    }
-    requests.post(url, json=data)
-
-
-# ---------------- GET UPDATES ----------------
 
 last_update_id = 0
 
@@ -29,56 +14,41 @@ def get_updates():
     params = {"offset": last_update_id + 1}
 
     res = requests.get(url, params=params)
-    data = res.json()
 
-    if "result" in data:
-        return data["result"]
-    return []
+    print("STATUS:", res.status_code)
+    print("TEXT:", res.text)   # 👈 خیلی مهم
+
+    try:
+        return res.json().get("result", [])
+    except:
+        return []
 
 
-# ---------------- BOT LOOP ----------------
+def send(chat_id, text):
+    url = BASE_URL + "/sendMessage"
+    requests.post(url, json={"chat_id": chat_id, "text": text})
 
-print("Bot is running...")
+
+print("Bot started...")
 
 while True:
-
     updates = get_updates()
 
-    for update in updates:
+    print("UPDATES:", updates)
 
-        last_update_id = update["update_id"]
+    for u in updates:
+        last_update_id = u["update_id"]
 
-        if "message" not in update:
+        if "message" not in u:
             continue
 
-        message = update["message"]
-        chat_id = message["chat"]["id"]
-        text = message.get("text", "")
+        msg = u["message"]
+        chat_id = msg["chat"]["id"]
+        text = msg.get("text", "")
 
-        # /start
+        print("MESSAGE:", text)
+
         if text == "/start":
-            send_message(
-                chat_id,
-                "👋 سلام!\nبه ربات ابزار بله خوش آمدی."
-            )
+            send(chat_id, "سلام 👋 ربات فعاله")
 
-        # menu
-        elif text == "📥 فایل‌ها":
-            send_message(chat_id, "🚧 بخش فایل‌ها به زودی...")
-
-        elif text == "🖼 تصویر":
-            send_message(chat_id, "🚧 بخش تصویر به زودی...")
-
-        elif text == "📝 متن":
-            send_message(chat_id, "🚧 بخش متن به زودی...")
-
-        elif text == "🔐 امنیت":
-            send_message(chat_id, "🚧 بخش امنیت به زودی...")
-
-        elif text == "👤 پروفایل":
-            send_message(chat_id, "👤 پروفایل شما در نسخه بعد اضافه می‌شود")
-
-        else:
-            send_message(chat_id, "از دستورات ربات استفاده کن 👇")
-
-    time.sleep(1)
+    time.sleep(2)
