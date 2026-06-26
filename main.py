@@ -1,15 +1,17 @@
 import sqlite3
 from datetime import datetime
-from balethon import Client, filters, ReplyKeyboardMarkup
 
-TOKEN = "BOT_TOKEN"
+from balethon import Client
+from balethon.objects import InlineKeyboardMarkup, InlineKeyboardButton
+
+TOKEN = "YOUR_BOT_TOKEN"
 
 # ---------------- DATABASE ----------------
 
 db = sqlite3.connect("users.db", check_same_thread=False)
-cursor = db.cursor()
+cur = db.cursor()
 
-cursor.execute("""
+cur.execute("""
 CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY,
     first_name TEXT,
@@ -22,144 +24,115 @@ db.commit()
 
 
 def add_user(user):
-    cursor.execute(
-        "INSERT OR IGNORE INTO users(id,first_name,username,join_date,requests) VALUES(?,?,?,?,0)",
+    cur.execute(
+        "INSERT OR IGNORE INTO users VALUES (?,?,?,?,0)",
         (
             user.id,
             user.first_name,
             user.username,
-            datetime.now().strftime("%Y-%m-%d %H:%M")
+            str(datetime.now())
         )
     )
     db.commit()
 
 
 def add_request(user_id):
-    cursor.execute(
-        "UPDATE users SET requests=requests+1 WHERE id=?",
-        (user_id,)
-    )
+    cur.execute("UPDATE users SET requests = requests + 1 WHERE id=?", (user_id,))
     db.commit()
 
 
 def get_user(user_id):
-    cursor.execute(
-        "SELECT * FROM users WHERE id=?",
-        (user_id,)
-    )
-    return cursor.fetchone()
+    cur.execute("SELECT * FROM users WHERE id=?", (user_id,))
+    return cur.fetchone()
 
 
-# ---------------- KEYBOARD ----------------
+# ---------------- MENU (Inline / Glass Buttons) ----------------
 
-menu = ReplyKeyboardMarkup(
-    keyboard=[
-        ["📥 فایل‌ها", "🖼 ابزار تصویر"],
-        ["📝 ابزار متن", "🔐 امنیت"],
-        ["👤 پروفایل", "ℹ️ راهنما"]
+menu = InlineKeyboardMarkup([
+    [
+        InlineKeyboardButton("📥 فایل‌ها", callback_data="files"),
+        InlineKeyboardButton("🖼 تصویر", callback_data="image")
     ],
-    resize_keyboard=True
-)
+    [
+        InlineKeyboardButton("📝 متن", callback_data="text"),
+        InlineKeyboardButton("🔐 امنیت", callback_data="security")
+    ],
+    [
+        InlineKeyboardButton("👤 پروفایل", callback_data="profile"),
+        InlineKeyboardButton("ℹ️ راهنما", callback_data="help")
+    ]
+])
+
 
 # ---------------- BOT ----------------
 
-app = Client(
-    "SimpleBot",
-    bot_token=TOKEN
-)
+app = Client("bot", bot_token=TOKEN)
 
 
-@app.on_message(filters.command("start"))
-async def start(client, message):
+@app.on_message()
+async def handler(client, message):
 
-    add_user(message.from_user)
+    if not message.text:
+        return
 
-    await message.reply(
-        f"""سلام {message.from_user.first_name} 👋
-
-به ربات ابزار خوش آمدی.
-
-یکی از گزینه‌های زیر را انتخاب کن.""",
-        reply_markup=menu
-    )
-
-
-@app.on_message(filters.text("👤 پروفایل"))
-async def profile(client, message):
-
-    add_request(message.from_user.id)
-
-    user = get_user(message.from_user.id)
-
-    await message.reply(
-f"""
-👤 پروفایل
-
-🆔 {user[0]}
-
-👤 نام:
-{user[1]}
-
-📛 یوزرنیم:
-{user[2]}
-
-📅 تاریخ عضویت:
-{user[3]}
-
-📊 تعداد درخواست‌ها:
-{user[4]}
-"""
-)
-
-
-@app.on_message(filters.text)
-async def menu_handler(client, message):
-
-    add_request(message.from_user.id)
-
+    user = message.from_user
     text = message.text
 
-    if text == "📥 فایل‌ها":
+    add_user(user)
+    add_request(user.id)
+
+    # START
+    if text == "/start":
         await message.reply(
-            "📄 ابزارهای فایل\n\n"
-            "🚧 به‌زودی:\n"
-            "• عکس به PDF\n"
-            "• PDF به عکس\n"
-            "• ادغام PDF"
+            f"سلام {user.first_name} 👋\nبه ربات ابزار خوش آمدی.",
+            reply_markup=menu
         )
 
-    elif text == "🖼 ابزار تصویر":
+    # TEXT MENU (fallback if user types)
+    elif text == "👤 پروفایل":
+        u = get_user(user.id)
         await message.reply(
-            "🖼 ابزارهای تصویر\n\n"
-            "🚧 به‌زودی:\n"
-            "• QR Code\n"
-            "• OCR\n"
-            "• واترمارک"
+            f"""👤 پروفایل
+
+🆔 {u[0]}
+👤 {u[1]}
+📛 {u[2]}
+📅 {u[3]}
+📊 {u[4]}"""
         )
 
-    elif text == "📝 ابزار متن":
-        await message.reply(
-            "📝 ابزار متن\n\n"
-            "🚧 به‌زودی:\n"
-            "• شمارش کلمات\n"
-            "• قالب‌بندی JSON\n"
-            "• Markdown"
+    else:
+        await message.reply("از منو استفاده کن 👇")
+
+
+# ---------------- CALLBACK BUTTONS ----------------
+
+@app.on_callback_query()
+async def callback(client, callback):
+
+    data = callback.data
+    user = callback.from_user
+
+    if data == "files":
+        await callback.message.edit("📥 بخش فایل‌ها (نسخه بعدی)")
+
+    elif data == "image":
+        await callback.message.edit("🖼 بخش تصویر (نسخه بعدی)")
+
+    elif data == "text":
+        await callback.message.edit("📝 بخش متن (نسخه بعدی)")
+
+    elif data == "security":
+        await callback.message.edit("🔐 بخش امنیت (نسخه بعدی)")
+
+    elif data == "profile":
+        u = get_user(user.id)
+        await callback.message.edit(
+            f"👤 پروفایل\n\n👤 {u[1]}\n📊 {u[4]}"
         )
 
-    elif text == "🔐 امنیت":
-        await message.reply(
-            "🔐 ابزار امنیت\n\n"
-            "🚧 به‌زودی:\n"
-            "• تولید رمز عبور\n"
-            "• UUID\n"
-            "• Hash"
-        )
-
-    elif text == "ℹ️ راهنما":
-        await message.reply(
-            "این نسخه اولیه ربات است.\n"
-            "در نسخه‌های بعدی امکانات بیشتری اضافه خواهد شد."
-        )
+    elif data == "help":
+        await callback.message.edit("ℹ️ راهنما: از دکمه‌ها استفاده کن")
 
 
 app.run()
