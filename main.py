@@ -4,7 +4,7 @@ from datetime import datetime
 from balethon import Client
 from balethon.objects import InlineKeyboardMarkup, InlineKeyboardButton
 
-TOKEN = "YOUR_BOT_TOKEN"
+TOKEN = "BOT_TOKEN"
 
 # ---------------- DATABASE ----------------
 
