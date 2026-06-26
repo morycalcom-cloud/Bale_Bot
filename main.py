@@ -1,98 +1,84 @@
-import sqlite3
-from datetime import datetime
-from balethon import Client, ReplyKeyboardMarkup
+import requests
+import time
 
 TOKEN = "BOT_TOKEN"
 
-# ---------------- DB ----------------
-
-db = sqlite3.connect("users.db", check_same_thread=False)
-cur = db.cursor()
-
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users(
-id INTEGER PRIMARY KEY,
-first_name TEXT,
-username TEXT,
-join_date TEXT,
-requests INTEGER DEFAULT 0
-)
-""")
-db.commit()
+BASE_URL = f"https://tapi.bale.ai/bot{TOKEN}"
 
 
-def add_user(user):
-    cur.execute(
-        "INSERT OR IGNORE INTO users VALUES (?,?,?,?,0)",
-        (user.id, user.first_name, user.username, str(datetime.now()))
-    )
-    db.commit()
+# ---------------- SEND MESSAGE ----------------
+
+def send_message(chat_id, text):
+    url = BASE_URL + "/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": text
+    }
+    requests.post(url, json=data)
 
 
-def add_req(uid):
-    cur.execute("UPDATE users SET requests=requests+1 WHERE id=?", (uid,))
-    db.commit()
+# ---------------- GET UPDATES ----------------
+
+last_update_id = 0
 
 
-def get_user(uid):
-    cur.execute("SELECT * FROM users WHERE id=?", (uid,))
-    return cur.fetchone()
+def get_updates():
+    global last_update_id
+
+    url = BASE_URL + "/getUpdates"
+    params = {"offset": last_update_id + 1}
+
+    res = requests.get(url, params=params)
+    data = res.json()
+
+    if "result" in data:
+        return data["result"]
+    return []
 
 
-# ---------------- MENU ----------------
+# ---------------- BOT LOOP ----------------
 
-menu = ReplyKeyboardMarkup(
-    keyboard=[
-        ["📥 فایل‌ها", "🖼 تصویر"],
-        ["📝 متن", "🔐 امنیت"],
-        ["👤 پروفایل", "ℹ️ راهنما"]
-    ],
-    resize_keyboard=True
-)
+print("Bot is running...")
 
-# ---------------- BOT ----------------
+while True:
 
-app = Client("bot", bot_token=TOKEN)
+    updates = get_updates()
 
+    for update in updates:
 
-@app.on_message()
-async def handler(client, message):
+        last_update_id = update["update_id"]
 
-    if not message.text:
-        return
+        if "message" not in update:
+            continue
 
-    user = message.from_user
-    text = message.text
+        message = update["message"]
+        chat_id = message["chat"]["id"]
+        text = message.get("text", "")
 
-    add_user(user)
-    add_req(user.id)
+        # /start
+        if text == "/start":
+            send_message(
+                chat_id,
+                "👋 سلام!\nبه ربات ابزار بله خوش آمدی."
+            )
 
-    if text == "/start":
-        await message.reply(
-            f"سلام {user.first_name} 👋",
-            reply_markup=menu
-        )
+        # menu
+        elif text == "📥 فایل‌ها":
+            send_message(chat_id, "🚧 بخش فایل‌ها به زودی...")
 
-    elif text == "👤 پروفایل":
-        u = get_user(user.id)
-        await message.reply(
-            f"👤 پروفایل\n\n👤 {u[1]}\n📊 درخواست‌ها: {u[4]}"
-        )
+        elif text == "🖼 تصویر":
+            send_message(chat_id, "🚧 بخش تصویر به زودی...")
 
-    elif text == "📥 فایل‌ها":
-        await message.reply("🚧 بخش فایل‌ها در نسخه بعد")
+        elif text == "📝 متن":
+            send_message(chat_id, "🚧 بخش متن به زودی...")
 
-    elif text == "🖼 تصویر":
-        await message.reply("🚧 بخش تصویر در نسخه بعد")
+        elif text == "🔐 امنیت":
+            send_message(chat_id, "🚧 بخش امنیت به زودی...")
 
-    elif text == "📝 متن":
-        await message.reply("🚧 بخش متن در نسخه بعد")
+        elif text == "👤 پروفایل":
+            send_message(chat_id, "👤 پروفایل شما در نسخه بعد اضافه می‌شود")
 
-    elif text == "🔐 امنیت":
-        await message.reply("🚧 بخش امنیت در نسخه بعد")
+        else:
+            send_message(chat_id, "از دستورات ربات استفاده کن 👇")
 
-    else:
-        await message.reply("از منو استفاده کن 👇")
-
-
-app.run()
+    time.sleep(1)
