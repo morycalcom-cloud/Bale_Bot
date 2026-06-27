@@ -1,36 +1,31 @@
-import sqlite3
 import os
+from sqlalchemy import create_engine, text
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DATABASE_URL = os.environ["DATABASE_URL"]
 
-DATA_DIR = os.path.join(BASE_DIR, "data")
+engine = create_engine(DATABASE_URL)
 
-os.makedirs(DATA_DIR, exist_ok=True)
-
-DB_PATH = os.path.join(DATA_DIR, "users.db")
-
-db = sqlite3.connect(DB_PATH, check_same_thread=False)
-
-cursor = db.cursor()
-
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS users(
-    id INTEGER PRIMARY KEY,
-    name TEXT
-)
-""")
-
-db.commit()
+with engine.begin() as conn:
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS users(
+            id BIGINT PRIMARY KEY,
+            name TEXT
+        )
+    """))
 
 
 def add_user(user_id, name):
-    cursor.execute(
-        "INSERT OR IGNORE INTO users VALUES (?, ?)",
-        (user_id, name)
-    )
-    db.commit()
+    with engine.begin() as conn:
+        conn.execute(
+            text("""
+                INSERT INTO users(id,name)
+                VALUES(:id,:name)
+                ON CONFLICT(id) DO NOTHING
+            """),
+            {"id": user_id, "name": name}
+        )
 
 
 def count_users():
-    cursor.execute("SELECT COUNT(*) FROM users")
-    return cursor.fetchone()[0]
+    with engine.begin() as conn:
+        return conn.execute(text("SELECT COUNT(*) FROM users")).scalar()
